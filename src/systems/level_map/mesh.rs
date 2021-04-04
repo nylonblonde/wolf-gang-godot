@@ -401,21 +401,42 @@ pub fn create_add_components_system() -> impl systems::Runnable {
                                         bottom_right
                                     ];
 
-                                    let mut connect_points: Vec<Vector3> = Vec::with_capacity(12);
-                                    let mut face_points: Vec<Vector3> = Vec::with_capacity(12);
+                                    // let mut connect_points: Vec<Vector3> = Vec::with_capacity(12);
+                                    // let mut face_points: Vec<Vector3> = Vec::with_capacity(12);
+
+                                    let (face_tx, face_rx) = crossbeam_channel::unbounded::<(usize, Vec<Vector3>)>();
+                                    let (conn_tx, conn_rx) = crossbeam_channel::unbounded::<(usize, Vec<Vector3>)>();
 
                                     let corners_len = corners.len();
-                                    for i in 0..corners_len {
+                                    (0..corners_len).into_par_iter().for_each_with((face_tx, conn_tx),|(face_tx,conn_tx), i| {
 
                                         let right = corners[i];
                                         let left = corners[(i + 1) % corners_len];
 
-                                        define_verts_from_sides(&point_sides, left, right, center, &mut face_points);
+                                        let must_connect = must_connect.clone();
+                                        let point_sides = point_sides.clone();
+                                        rayon::scope(move |s| {
+                                            s.spawn(move |_| {
+                                                let face_pts = define_verts_from_sides(&point_sides, left, right, center);
+                                                face_tx.send((i, face_pts)).ok();
+                                            });
+                                            if let Some(sides) = must_connect.as_ref() {
+                                                let sides = sides.clone();
+                                                s.spawn(move |_| {
+                                                    let conn_pts = define_verts_from_sides(&sides, left, right, center);
+                                                    conn_tx.send((i, conn_pts)).ok();
+                                                });
+                                            };
+                                        })
+                                    });
 
-                                        if let Some(sides) = &must_connect {
-                                            define_verts_from_sides(&sides, left, right, center, &mut connect_points);
-                                        }
-                                    }
+                                    let mut face_points = face_rx.into_iter().collect::<Vec<(usize, Vec<Vector3>)>>();
+                                    face_points.par_sort_by(|(a, _), (b, _)| a.cmp(&b));
+                                    let face_points = face_points.into_iter().fold(Vec::new(), |mut acc, x| {acc.extend(x.1); acc});
+
+                                    let mut connect_points = conn_rx.into_iter().collect::<Vec<(usize, Vec<Vector3>)>>();
+                                    connect_points.par_sort_by(|(a, _), (b, _)| a.cmp(&b));
+                                    let connect_points = connect_points.into_iter().fold(Vec::new(), |mut acc, x| {acc.extend(x.1); acc});
 
                                     let mut face_points_final: Vec<Vector3> = Vec::with_capacity(12);
                                     //keep track of the indices of the face points so that we can use them again
@@ -909,7 +930,7 @@ pub fn get_open_sides(map_datas: &[(Entity, MapChunkData, Point)], map_data: &Ma
 
                     let chunk_point_dir = map_data.get_chunk_point() + adj_dir;
 
-                    match map_datas.iter().find(|(_, _, pt)| *pt == chunk_point_dir) {
+                    match map_datas.par_iter().find_first(|(_, _, pt)| *pt == chunk_point_dir) {
                         Some((_, map_data, _)) => {
                             
                             match map_data.octree.query_point(neighbor) {
@@ -981,7 +1002,8 @@ fn get_direction_of_edge(pt1: Vector3, pt2: Vector3, center: Vector3) -> Point {
 }
 
 //allowed because this is just a function that gets called here
-#[allow(clippy::too_many_arguments)] fn adjust_scaled_pts(open_sides: &HashSet<Point>, 
+#[allow(clippy::too_many_arguments)] 
+fn adjust_scaled_pts(open_sides: &HashSet<Point>, 
     dir: Point, 
     right_dir: Point,
     left_dir: Point,
@@ -1046,7 +1068,10 @@ fn get_direction_of_edge(pt1: Vector3, pt2: Vector3, center: Vector3) -> Point {
     (scaled_left, scaled_right)
 }
 
-fn define_verts_from_sides(sides: &HashSet<Point>, left: Vector3, right: Vector3, center: Vector3, points: &mut Vec<Vector3>) {
+fn define_verts_from_sides(sides: &HashSet<Point>, left: Vector3, right: Vector3, center: Vector3) -> Vec<Vector3> {
+    
+    let mut points: Vec<Vector3> = Vec::new();
+    
     let dir = get_direction_of_edge(right, left, center);
     let bevel = Vector3::new(dir.x as f32, dir.y as f32, dir.z as f32) * BEVEL_SIZE / 2.;
 
@@ -1148,10 +1173,13 @@ fn define_verts_from_sides(sides: &HashSet<Point>, left: Vector3, right: Vector3
         points.extend(&[scaled_right, scaled_left]);
 
     }
+
+    points
 }
 
 //allowed because this is just a function that gets called here
-#[allow(clippy::too_many_arguments)] fn draw_walls(
+#[allow(clippy::too_many_arguments)]
+fn draw_walls(
     points: &[Vector3], 
     sides: &HashSet<Point>, 
     vertex_data: &mut VertexData, 
@@ -1165,164 +1193,180 @@ fn define_verts_from_sides(sides: &HashSet<Point>, left: Vector3, right: Vector3
     //define the vertices for the walls
     let border_points_len = points.len();
 
-    if border_points_len > 0 {
+    if border_points_len == 0 {
+        return;
+    }
 
-        let top = points[0].y;
-        let height = top - bottom;
+    let top = points[0].y;
+    let height = top - bottom;
 
-        let begin = *offset;
-        let indices_len = border_points_len as i32 * 2;
+    let begin = *offset;
+    let indices_len = border_points_len * 2;
+    *offset += indices_len as i32;
 
-        let mut center = center;
+    let mut center = center;
 
-        center.y = 0.;
+    center.y = 0.;
 
-        //define the sides
-        for i in 0..border_points_len {
+    let (new_pts_tx, new_pts_rx) = crossbeam_channel::unbounded::<(usize, Vector3)>();
+    let (new_norm_tx, new_norm_rx) = crossbeam_channel::unbounded::<(usize, Vector3)>();
+    let (new_uv_tx, new_uv_rx) = crossbeam_channel::unbounded::<(usize, Vector2)>();
+    let (new_uv2_tx, new_uv2_rx) = crossbeam_channel::unbounded::<(usize, Vector2)>();
+    let (new_idx_tx, new_idx_rx) = crossbeam_channel::unbounded::<(usize, i32)>();
 
-            let border_point = points[i];
+    points.par_iter().enumerate().for_each_with((new_pts_tx, new_norm_tx, new_uv_tx, new_uv2_tx, new_idx_tx), |(new_pts_tx, new_norm_tx, new_uv_tx, new_uv2_tx, new_idx_tx), (i, border_point)| {
+        let border_point = *border_point;
 
-            //get the direction
-            let next_i = (i+1) % border_points_len;
+        //get the direction
+        let next_i = (i+1) % border_points_len;
 
-            let next_point = points.get(next_i).unwrap();
+        let next_point = points.get(next_i).unwrap();
 
-            let dir = get_direction_of_edge(border_point, *next_point, center);
+        let dir = get_direction_of_edge(border_point, *next_point, center);
 
+        let bottom_point = border_point - Vector3::new(0., height, 0.);
+
+        let point_idx = i * 2;
+        {
             //top
-            vertex_data.verts.push(border_point);
+            new_pts_tx.send((point_idx, border_point)).ok();
 
             //bottom
+            new_pts_tx.send((point_idx + 1, bottom_point)).ok();
+        }
 
-            let bottom_point = border_point - Vector3::new(0., height, 0.);
-            vertex_data.verts.push(bottom_point);
+        //define the uvs for the walls on every other iteration 
+        if i % 2 == 0 {
+
+            let uv_idx = i * 2;
+
+            let diff = *next_point - border_point;
+
+            let mut normal_origin = (*next_point + border_point) / 2.;
+            normal_origin.y = center.y;
+            normal_origin = (normal_origin - center).normalize();
+
+            let mut normal_origin_bp = normal_origin;
+            normal_origin_bp.y = border_point.y;
+            let mut normal_origin_bot = normal_origin;
+            normal_origin_bot.y = bottom_point.y;
+
+            {
+                new_norm_tx.send((uv_idx, normal_origin.normalize())).ok();
+                new_norm_tx.send((uv_idx + 1, normal_origin.normalize())).ok();
+
+                new_norm_tx.send((uv_idx + 2, normal_origin.normalize())).ok();
+                new_norm_tx.send((uv_idx + 3, normal_origin.normalize())).ok();
+            }
+
+            let mut u = 1.;
+            let mut next_u = 1.;
+
+            if dir.z.abs() > 0 {
+
+                u = world_point.x * TILE_SIZE + (border_point.x - world_point.x).abs() * TILE_SIZE;
+
+                next_u = world_point.x * TILE_SIZE + (next_point.x - world_point.x).abs() * TILE_SIZE ;
+
+                if diff.x > 0. {
+
+                    u = -u;
+                    next_u = -next_u;
+
+                }
+
+            } else if dir.x.abs() > 0 {
+                u = world_point.z * TILE_SIZE + (border_point.z - world_point.z).abs() * TILE_SIZE;
+
+                next_u = world_point.z * TILE_SIZE + (next_point.z - world_point.z).abs() * TILE_SIZE ;
+
+                if diff.z > 0. {
+
+                    u = -u;
+                    next_u = -next_u;
+
+                }
+            }
             
-            //define the uvs for the walls on every other iteration 
-            if i % 2 == 0 {
+            let mut vert_offset = if bottom < START_REPEAT_BELOW_HEIGHT  {
+                (bottom / REPEAT_AMOUNT_BELOW).floor() * REPEAT_AMOUNT_BELOW * TILE_SIZE
+            } else if bottom - START_REPEAT_ABOVE_HEIGHT >= START_REPEAT_BELOW_HEIGHT {
+                ((((bottom - START_REPEAT_ABOVE_HEIGHT) / REPEAT_AMOUNT_ABOVE).floor() * REPEAT_AMOUNT_ABOVE) - REPEAT_AMOUNT_BELOW) * TILE_SIZE
+            } else {
+                - REPEAT_AMOUNT_BELOW * TILE_SIZE
+            }; 
 
-                let diff = *next_point - border_point;
+            vert_offset -= WALL_VERTICAL_OFFSET * TILE_SIZE;
 
-                let mut normal_origin = (*next_point + border_point) / 2.;
-                normal_origin.y = center.y;
-                normal_origin = (normal_origin - center).normalize();
+            if true_top - bottom > 1.0 {
+                vert_offset += 1.0;
+            }
 
-                let mut normal_origin_bp = normal_origin;
-                normal_origin_bp.y = border_point.y;
-                let mut normal_origin_bot = normal_origin;
-                normal_origin_bot.y = bottom_point.y;
+            //define the uvs for the grass overhang textures
+            if map_coords_to_world(point).y + std::f32::EPSILON > true_top - 1. {
 
-                vertex_data.normals.push(normal_origin.normalize());
-                vertex_data.normals.push(normal_origin.normalize());
+                let (mut u, mut next_u) = if dir.z.abs() > 0 {
 
-                vertex_data.normals.push(normal_origin.normalize());
-                vertex_data.normals.push(normal_origin.normalize());
+                    let mut u = TILE_SIZE + (border_point.x - world_point.x).abs() * TILE_SIZE;
 
-                let mut u = 1.;
-                let mut next_u = 1.;
-
-                if dir.z.abs() > 0 {
-
-                    u = world_point.x * TILE_SIZE + (border_point.x - world_point.x).abs() * TILE_SIZE;
-
-                    next_u = world_point.x * TILE_SIZE + (next_point.x - world_point.x).abs() * TILE_SIZE ;
+                    let mut next_u = TILE_SIZE + (next_point.x - world_point.x).abs() * TILE_SIZE ;
 
                     if diff.x > 0. {
-
                         u = -u;
                         next_u = -next_u;
-
                     }
+
+                    (u, next_u)
 
                 } else if dir.x.abs() > 0 {
-                    u = world_point.z * TILE_SIZE + (border_point.z - world_point.z).abs() * TILE_SIZE;
+                    let mut u = TILE_SIZE + (border_point.z - world_point.z).abs() * TILE_SIZE;
 
-                    next_u = world_point.z * TILE_SIZE + (next_point.z - world_point.z).abs() * TILE_SIZE ;
+                    let mut next_u = TILE_SIZE + (next_point.z - world_point.z).abs() * TILE_SIZE ;
 
                     if diff.z > 0. {
-
                         u = -u;
                         next_u = -next_u;
-
                     }
-                }
-                
-                let mut vert_offset = if bottom < START_REPEAT_BELOW_HEIGHT  {
-                    (bottom / REPEAT_AMOUNT_BELOW).floor() * REPEAT_AMOUNT_BELOW * TILE_SIZE
-                } else if bottom - START_REPEAT_ABOVE_HEIGHT >= START_REPEAT_BELOW_HEIGHT {
-                    ((((bottom - START_REPEAT_ABOVE_HEIGHT) / REPEAT_AMOUNT_ABOVE).floor() * REPEAT_AMOUNT_ABOVE) - REPEAT_AMOUNT_BELOW) * TILE_SIZE
+
+                    (u, next_u)
                 } else {
-                    - REPEAT_AMOUNT_BELOW * TILE_SIZE
-                }; 
+                    (u, next_u)
+                };
 
-                vert_offset -= WALL_VERTICAL_OFFSET * TILE_SIZE;
-
-                if true_top - bottom > 1.0 {
-                    vert_offset += 1.0;
+                if u < 0. {
+                    u = (1. - u) % 1.;
                 }
 
-                //define the uvs for the grass overhang textures
-                if map_coords_to_world(point).y + std::f32::EPSILON > true_top - 1. {
-
-                    let (mut u, mut next_u) = if dir.z.abs() > 0 {
-
-                        let mut u = TILE_SIZE + (border_point.x - world_point.x).abs() * TILE_SIZE;
-
-                        let mut next_u = TILE_SIZE + (next_point.x - world_point.x).abs() * TILE_SIZE ;
-
-                        if diff.x > 0. {
-                            u = -u;
-                            next_u = -next_u;
-                        }
-
-                        (u, next_u)
-
-                    } else if dir.x.abs() > 0 {
-                        let mut u = TILE_SIZE + (border_point.z - world_point.z).abs() * TILE_SIZE;
-
-                        let mut next_u = TILE_SIZE + (next_point.z - world_point.z).abs() * TILE_SIZE ;
-
-                        if diff.z > 0. {
-                            u = -u;
-                            next_u = -next_u;
-                        }
-
-                        (u, next_u)
-                    } else {
-                        (u, next_u)
-                    };
-
-                    if u < 0. {
-                        u = (1. - u) % 1.;
-                    }
-
-                    if next_u < 0. {
-                        next_u = (1. - next_u) % 1.;
-                    }
-
-                    let top_v = TILE_SIZE * (true_top - top);
-                    let bottom_v = TILE_SIZE * (true_top - bottom);
-
-                    vertex_data.uv2s.push(Vector2::new(u, top_v));
-                    vertex_data.uv2s.push(Vector2::new(u, bottom_v));
-
-                    vertex_data.uv2s.push(Vector2::new(next_u, top_v));
-                    vertex_data.uv2s.push(Vector2::new(next_u, bottom_v));
-
-                } else {
-                    vertex_data.uv2s.push(Vector2::default());
-                    vertex_data.uv2s.push(Vector2::default());
-                    
-                    vertex_data.uv2s.push(Vector2::default());
-                    vertex_data.uv2s.push(Vector2::default());
+                if next_u < 0. {
+                    next_u = (1. - next_u) % 1.;
                 }
 
-                vertex_data.uvs.push(Vector2::new(u,-1.-height * TILE_SIZE - bottom * TILE_SIZE + vert_offset)); //bottom of face
-                vertex_data.uvs.push(Vector2::new(u,-1.-bottom * TILE_SIZE + vert_offset)); //top of face
+                let top_v = TILE_SIZE * (true_top - top);
+                let bottom_v = TILE_SIZE * (true_top - bottom);
 
-                vertex_data.uvs.push(Vector2::new(next_u,-1.-height * TILE_SIZE - bottom * TILE_SIZE + vert_offset)); //bottom of face
-                vertex_data.uvs.push(Vector2::new(next_u,-1.-bottom * TILE_SIZE + vert_offset)); //top of face
+                new_uv2_tx.send((uv_idx, Vector2::new(u, top_v))).ok();
+                new_uv2_tx.send((uv_idx + 1, Vector2::new(u, bottom_v))).ok();
 
-            } 
+                new_uv2_tx.send((uv_idx + 2, Vector2::new(next_u, top_v))).ok();
+                new_uv2_tx.send((uv_idx + 3, Vector2::new(next_u, bottom_v))).ok();
+
+            } else {
+                new_uv2_tx.send((uv_idx, Vector2::default())).ok();
+                new_uv2_tx.send((uv_idx + 1, Vector2::default())).ok();
+
+                new_uv2_tx.send((uv_idx + 2, Vector2::default())).ok();
+                new_uv2_tx.send((uv_idx + 3, Vector2::default())).ok();
+            }
+
+            //bottom of face
+            new_uv_tx.send((uv_idx, Vector2::new(u,-1.-height * TILE_SIZE - bottom * TILE_SIZE + vert_offset))).ok();
+            //top of face
+            new_uv_tx.send((uv_idx + 1, Vector2::new(u,-1.-bottom * TILE_SIZE + vert_offset))).ok();
+
+            //bottom of face
+            new_uv_tx.send((uv_idx + 2, Vector2::new(next_u,-1.-height * TILE_SIZE - bottom * TILE_SIZE + vert_offset))).ok();
+            //top of face
+            new_uv_tx.send((uv_idx + 3, Vector2::new(next_u,-1.-bottom * TILE_SIZE + vert_offset))).ok();
 
             //if there are only 2 border points, only draw from the first index to avoid drawing both sides since the index will loop around
             if border_points_len > 2 || i < border_points_len-1 {
@@ -1331,29 +1375,54 @@ fn define_verts_from_sides(sides: &HashSet<Point>, left: Vector3, right: Vector3
 
                     if sides.contains(&dir) {
 
-                        let j = *offset - begin;
+                        let j = point_idx as i32;
+                        let len = indices_len as i32;
 
-                        vertex_data.indices.push(j % indices_len + begin);
-                        vertex_data.indices.push((j+1) % indices_len + begin);
-                        vertex_data.indices.push((j+2) % indices_len + begin);
+                        let indices_idx = i * 6;
 
-                        vertex_data.indices.push((j+2) % indices_len + begin);
-                        vertex_data.indices.push((j+1) % indices_len + begin);
-                        vertex_data.indices.push((j+3) % indices_len + begin);
+                        new_idx_tx.send((indices_idx, j % len + begin)).ok();
+                        new_idx_tx.send((indices_idx + 1, (j+1) % len + begin)).ok();
+                        new_idx_tx.send((indices_idx + 2, (j+2) % len + begin)).ok();
+
+                        new_idx_tx.send((indices_idx + 3, (j+2) % len + begin)).ok();
+                        new_idx_tx.send((indices_idx + 4, (j+1) % len + begin)).ok();
+                        new_idx_tx.send((indices_idx + 5, (j+3) % len + begin)).ok();
 
                     } else {
                         // godot_print!("{:?} is not drawing {:?}", point, dir);
                     }
                 } else {
-                    // godot_print!("Skipped some points because they were too close");
+                    godot_print!("Skipped some points because they were too close");
                 }
             }
+        } 
+    });
 
-            *offset += 2;
+    let mut new_pts = new_pts_rx.into_iter().collect::<Vec<(usize, Vector3)>>();
+    new_pts.par_sort_by(|(a, _), (b, _)| a.cmp(&b));
+    let new_pts = new_pts.into_par_iter().map(|(_, v)| v);
 
-        }
-    }
-    
+    let mut new_normals = new_norm_rx.into_iter().collect::<Vec<(usize, Vector3)>>();
+    new_normals.par_sort_by(|(a, _), (b, _)| a.cmp(&b));
+    let new_normals = new_normals.into_par_iter().map(|(_, n)| n);
+
+    let mut new_uvs = new_uv_rx.into_iter().collect::<Vec<(usize, Vector2)>>();
+    new_uvs.par_sort_by(|(a, _), (b, _)| a.cmp(&b));
+    let new_uvs = new_uvs.into_par_iter().map(|(_, u)| u);
+
+    let mut new_uv2s = new_uv2_rx.into_iter().collect::<Vec<(usize, Vector2)>>();
+    new_uv2s.par_sort_by(|(a, _), (b, _)| a.cmp(&b));
+    let new_uv2s = new_uv2s.into_par_iter().map(|(_, u)| u);
+
+    let mut new_indices = new_idx_rx.into_iter().collect::<Vec<(usize, i32)>>();
+    new_indices.par_sort_by(|(a, _), (b, _)| a.cmp(&b));
+    let new_indices = new_indices.into_par_iter().map(|(_, i)| i);
+
+    vertex_data.verts.par_extend(new_pts);
+    vertex_data.normals.par_extend(new_normals);
+    vertex_data.uvs.par_extend(new_uvs);
+    vertex_data.uv2s.par_extend(new_uv2s);
+    vertex_data.indices.par_extend(new_indices);
 }
 
 pub struct MapMeshData {
@@ -1397,11 +1466,11 @@ impl VertexData {
         self.uv2s.clear();
         self.indices.clear();
 
-        self.verts.extend(other.verts.into_iter());
-        self.normals.extend(other.normals.into_iter());
-        self.uvs.extend(other.uvs.into_iter());
-        self.uv2s.extend(other.uv2s.into_iter());
-        self.indices.extend(other.indices.into_iter());
+        self.verts.par_extend(other.verts.into_par_iter());
+        self.normals.par_extend(other.normals.into_par_iter());
+        self.uvs.par_extend(other.uvs.into_par_iter());
+        self.uv2s.par_extend(other.uv2s.into_par_iter());
+        self.indices.par_extend(other.indices.into_par_iter());
 
     }
 }
