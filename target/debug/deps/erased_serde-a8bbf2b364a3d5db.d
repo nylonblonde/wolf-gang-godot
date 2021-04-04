@@ -1,0 +1,12 @@
+/home/lyon/RustProjects/wolf_gang/target/debug/deps/erased_serde-a8bbf2b364a3d5db.rmeta: /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/erased-serde-0.3.13/src/lib.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/erased-serde-0.3.13/src/macros.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/erased-serde-0.3.13/src/any.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/erased-serde-0.3.13/src/de.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/erased-serde-0.3.13/src/error.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/erased-serde-0.3.13/src/features_check/mod.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/erased-serde-0.3.13/src/ser.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/erased-serde-0.3.13/src/private.rs
+
+/home/lyon/RustProjects/wolf_gang/target/debug/deps/erased_serde-a8bbf2b364a3d5db.d: /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/erased-serde-0.3.13/src/lib.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/erased-serde-0.3.13/src/macros.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/erased-serde-0.3.13/src/any.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/erased-serde-0.3.13/src/de.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/erased-serde-0.3.13/src/error.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/erased-serde-0.3.13/src/features_check/mod.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/erased-serde-0.3.13/src/ser.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/erased-serde-0.3.13/src/private.rs
+
+/home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/erased-serde-0.3.13/src/lib.rs:
+/home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/erased-serde-0.3.13/src/macros.rs:
+/home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/erased-serde-0.3.13/src/any.rs:
+/home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/erased-serde-0.3.13/src/de.rs:
+/home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/erased-serde-0.3.13/src/error.rs:
+/home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/erased-serde-0.3.13/src/features_check/mod.rs:
+/home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/erased-serde-0.3.13/src/ser.rs:
+/home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/erased-serde-0.3.13/src/private.rs:

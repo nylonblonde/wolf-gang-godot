@@ -1,0 +1,12 @@
+/home/lyon/RustProjects/wolf_gang/target/x86_64-pc-windows-gnu/release/deps/httparse-6171b6ed8291d0c9.rmeta: /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/httparse-1.3.5/src/lib.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/httparse-1.3.5/src/iter.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/httparse-1.3.5/src/macros.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/httparse-1.3.5/src/simd/mod.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/httparse-1.3.5/src/simd/sse42.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/httparse-1.3.5/src/simd/avx2.rs
+
+/home/lyon/RustProjects/wolf_gang/target/x86_64-pc-windows-gnu/release/deps/libhttparse-6171b6ed8291d0c9.rlib: /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/httparse-1.3.5/src/lib.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/httparse-1.3.5/src/iter.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/httparse-1.3.5/src/macros.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/httparse-1.3.5/src/simd/mod.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/httparse-1.3.5/src/simd/sse42.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/httparse-1.3.5/src/simd/avx2.rs
+
+/home/lyon/RustProjects/wolf_gang/target/x86_64-pc-windows-gnu/release/deps/httparse-6171b6ed8291d0c9.d: /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/httparse-1.3.5/src/lib.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/httparse-1.3.5/src/iter.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/httparse-1.3.5/src/macros.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/httparse-1.3.5/src/simd/mod.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/httparse-1.3.5/src/simd/sse42.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/httparse-1.3.5/src/simd/avx2.rs
+
+/home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/httparse-1.3.5/src/lib.rs:
+/home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/httparse-1.3.5/src/iter.rs:
+/home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/httparse-1.3.5/src/macros.rs:
+/home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/httparse-1.3.5/src/simd/mod.rs:
+/home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/httparse-1.3.5/src/simd/sse42.rs:
+/home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/httparse-1.3.5/src/simd/avx2.rs:

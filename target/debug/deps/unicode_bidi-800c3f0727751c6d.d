@@ -1,0 +1,13 @@
+/home/lyon/RustProjects/wolf_gang/target/debug/deps/unicode_bidi-800c3f0727751c6d.rmeta: /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-bidi-0.3.4/src/lib.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-bidi-0.3.4/src/deprecated.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-bidi-0.3.4/src/format_chars.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-bidi-0.3.4/src/level.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-bidi-0.3.4/src/char_data/mod.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-bidi-0.3.4/src/char_data/tables.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-bidi-0.3.4/src/explicit.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-bidi-0.3.4/src/implicit.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-bidi-0.3.4/src/prepare.rs
+
+/home/lyon/RustProjects/wolf_gang/target/debug/deps/unicode_bidi-800c3f0727751c6d.d: /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-bidi-0.3.4/src/lib.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-bidi-0.3.4/src/deprecated.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-bidi-0.3.4/src/format_chars.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-bidi-0.3.4/src/level.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-bidi-0.3.4/src/char_data/mod.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-bidi-0.3.4/src/char_data/tables.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-bidi-0.3.4/src/explicit.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-bidi-0.3.4/src/implicit.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-bidi-0.3.4/src/prepare.rs
+
+/home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-bidi-0.3.4/src/lib.rs:
+/home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-bidi-0.3.4/src/deprecated.rs:
+/home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-bidi-0.3.4/src/format_chars.rs:
+/home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-bidi-0.3.4/src/level.rs:
+/home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-bidi-0.3.4/src/char_data/mod.rs:
+/home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-bidi-0.3.4/src/char_data/tables.rs:
+/home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-bidi-0.3.4/src/explicit.rs:
+/home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-bidi-0.3.4/src/implicit.rs:
+/home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-bidi-0.3.4/src/prepare.rs:

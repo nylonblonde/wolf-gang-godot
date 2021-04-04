@@ -1,0 +1,11 @@
+/home/lyon/RustProjects/wolf_gang/target/release/deps/unicode_segmentation-102a3a236eba2622.rmeta: /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-segmentation-1.7.1/src/lib.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-segmentation-1.7.1/src/grapheme.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-segmentation-1.7.1/src/tables.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-segmentation-1.7.1/src/word.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-segmentation-1.7.1/src/sentence.rs
+
+/home/lyon/RustProjects/wolf_gang/target/release/deps/libunicode_segmentation-102a3a236eba2622.rlib: /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-segmentation-1.7.1/src/lib.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-segmentation-1.7.1/src/grapheme.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-segmentation-1.7.1/src/tables.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-segmentation-1.7.1/src/word.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-segmentation-1.7.1/src/sentence.rs
+
+/home/lyon/RustProjects/wolf_gang/target/release/deps/unicode_segmentation-102a3a236eba2622.d: /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-segmentation-1.7.1/src/lib.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-segmentation-1.7.1/src/grapheme.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-segmentation-1.7.1/src/tables.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-segmentation-1.7.1/src/word.rs /home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-segmentation-1.7.1/src/sentence.rs
+
+/home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-segmentation-1.7.1/src/lib.rs:
+/home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-segmentation-1.7.1/src/grapheme.rs:
+/home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-segmentation-1.7.1/src/tables.rs:
+/home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-segmentation-1.7.1/src/word.rs:
+/home/lyon/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-segmentation-1.7.1/src/sentence.rs:
