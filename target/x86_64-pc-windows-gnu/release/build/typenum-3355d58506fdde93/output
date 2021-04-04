@@ -1,2 +1,0 @@
-cargo:rustc-env=TYPENUM_BUILD_CONSTS=/home/lyon/RustProjects/wolf_gang/target/x86_64-pc-windows-gnu/release/build/typenum-3355d58506fdde93/out/consts.rs
-cargo:rustc-env=TYPENUM_BUILD_OP=/home/lyon/RustProjects/wolf_gang/target/x86_64-pc-windows-gnu/release/build/typenum-3355d58506fdde93/out/op.rs
