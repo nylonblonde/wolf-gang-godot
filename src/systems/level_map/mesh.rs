@@ -442,21 +442,23 @@ pub fn create_add_components_system() -> impl systems::Runnable {
                                     //keep track of the indices of the face points so that we can use them again
                                     // in the bezel curve for the top face
                                     let mut face_point_indices: Vec<i32> = Vec::with_capacity(12);
-
                                     let face_points_len = face_points.len();
-                                    let mut i = 0;
-                                    while i < face_points_len {
 
+                                    let (face_tx, face_rx) = crossbeam_channel::unbounded::<(usize, Vector3)>();
+                                    
+                                    (0..face_points_len).into_par_iter().for_each_with(face_tx, |face_tx, i| {
                                         let right = face_points[i];
                                         let left = face_points[(i + 1) % face_points_len];
 
                                         if (right - left).length() > std::f32::EPSILON {
 
-                                            face_points_final.push(right);
+                                            face_tx.send((i, right)).ok();
                                         }
+                                    });
 
-                                        i += 1;
-                                    }
+                                    let mut face_points = face_rx.into_iter().collect::<Vec<(usize, Vector3)>>();
+                                    face_points.par_sort_by(|(a, _), (b, _)| a.cmp(&b));
+                                    face_points.into_par_iter().map(|(_, v)| v).collect_into_vec(&mut face_points_final);
 
                                     vertex_data.verts.push(center);
                                     vertex_data.uvs.push(Vector2::new(TILE_SIZE / 2. + tile_col_offset, TILE_SIZE / 2. + tile_row_offset));
@@ -464,34 +466,60 @@ pub fn create_add_components_system() -> impl systems::Runnable {
                                     vertex_data.normals.push(Vector3::new(0.,1.,0.));
                                     offset += 1;
 
+                                    //TODO: face_points_final and connect_points processing can happen simultaenously
+
                                     let face_points_final_len = face_points_final.len();
-                                    let mut i = 0;
-                                    let begin = offset;
-                                    while i < face_points_final_len {
 
-                                        let right = face_points_final[i % face_points_final_len];
+                                    if draw_top {
 
-                                        let u = (right.x - world_point.x).abs() * TILE_SIZE;
-                                        let v = (right.z - world_point.z).abs() * TILE_SIZE;
+                                        let (face_vert_tx, face_vert_rx) = crossbeam_channel::unbounded::<(usize, (Vector3, Vector3, Vector2, Vector2, i32))>();
+                                        let (face_idx_tx, face_idx_rx) = crossbeam_channel::unbounded::<(usize, i32)>();
 
-                                        if draw_top {
-                                            vertex_data.verts.push(right);
-                                            vertex_data.uvs.push(Vector2::new(u + tile_col_offset, v + tile_row_offset));
-                                            vertex_data.uv2s.push(Vector2::default());
-                                            vertex_data.normals.push(Vector3::new(0., 1., 0.));
+                                        (0..face_points_final_len).into_par_iter().for_each_with((face_vert_tx, face_idx_tx), |(face_vert_tx, face_idx_tx), i| {
+                                            let right = face_points_final[i % face_points_final_len];
 
-                                            face_point_indices.push(begin + i as i32);
+                                            let u = (right.x - world_point.x).abs() * TILE_SIZE;
+                                            let v = (right.z - world_point.z).abs() * TILE_SIZE;
 
-                                            offset += 1;
+                                            face_vert_tx.send(
+                                            (i, 
+                                                    (
+                                                        right,
+                                                        Vector3::new(0., 1., 0.),
+                                                        Vector2::new(u + tile_col_offset, v + tile_row_offset),
+                                                        Vector2::default(),
+                                                        offset + i as i32
+                                                    ),
+                                                )
+                                            ).ok();
 
                                             if i > 0 && i < face_points_final_len - 1 {
-                                                vertex_data.indices.push(begin);
-                                                vertex_data.indices.push(begin + i as i32);
-                                                vertex_data.indices.push(begin + (i as i32 + 1) % face_points_final_len as i32);
+                                                face_idx_tx.send((i, offset)).ok();
+                                                face_idx_tx.send((i, offset + i as i32)).ok();
+                                                face_idx_tx.send((i, offset + (i as i32 + 1) % face_points_final_len as i32)).ok();
                                             }
-                                        }
+                                        });
 
-                                        i+= 1;
+                                        offset += face_points_final_len as i32;
+
+                                        let mut face_verts = face_vert_rx.into_iter().collect::<Vec<(usize, (Vector3, Vector3, Vector2, Vector2, i32))>>();
+                                        face_verts.par_sort_by(|(a, _), (b, _)| a.cmp(&b));
+                                        let face_vertices = face_verts.par_iter().map(|(_,(v,_,_,_,_))| *v).collect::<Vec<Vector3>>();
+                                        let face_norms = face_verts.par_iter().map(|(_,(_,n,_,_,_))| *n).collect::<Vec<Vector3>>();
+                                        let face_uvs = face_verts.par_iter().map(|(_,(_,_,u,_,_))| *u).collect::<Vec<Vector2>>();
+                                        let face_uv2s = face_verts.par_iter().map(|(_,(_,_,_,u2,_))| *u2).collect::<Vec<Vector2>>();
+                                        face_verts.into_par_iter().map(|(_,(_,_,_,_,i))| i).collect_into_vec(&mut face_point_indices);
+
+                                        vertex_data.verts.par_extend(face_vertices.into_par_iter());
+                                        vertex_data.normals.par_extend(face_norms.into_par_iter());
+                                        vertex_data.uvs.par_extend(face_uvs.into_par_iter());
+                                        vertex_data.uv2s.par_extend(face_uv2s.into_par_iter());
+                                        
+                                        let mut face_indices = face_idx_rx.into_iter().collect::<Vec<(usize, i32)>>();
+                                        face_indices.par_sort_by(|(a, _), (b, _)| a.cmp(&b));
+                                        let face_indices = face_indices.into_par_iter().map(|(_, i)| i);
+
+                                        vertex_data.indices.par_extend(face_indices);
                                     }
 
                                     let connect_points_len = connect_points.len();
@@ -1392,7 +1420,7 @@ fn draw_walls(
                         // godot_print!("{:?} is not drawing {:?}", point, dir);
                     }
                 } else {
-                    godot_print!("Skipped some points because they were too close");
+                    // godot_print!("Skipped some points because they were too close");
                 }
             }
         } 
