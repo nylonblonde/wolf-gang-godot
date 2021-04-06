@@ -535,8 +535,8 @@ pub fn create_add_components_system() -> impl systems::Runnable {
                                                     //change the origin of our scale for when certain sides are exposed or not
                                                     let (scaled_left, scaled_right) = adjust_scaled_pts(&sides, dir, right_dir, left_dir, right_diag, left, right, center, left_rot, right_rot, original_scaled_left, original_scaled_right);
 
-                                                    conn_pts_tx.send((i, scaled_right)).ok();
-                                                    conn_pts_tx.send((i + 1, scaled_left)).ok();
+                                                    conn_pts_tx.send(((i * 2), scaled_right)).ok();
+                                                    conn_pts_tx.send(((i * 2) + 1, scaled_left)).ok();
                                                 });
 
                                             }
@@ -641,8 +641,8 @@ pub fn create_add_components_system() -> impl systems::Runnable {
 
                                         }
 
-                                        border_vert_tx.send((i, scaled_right)).ok();
-                                        border_vert_tx.send((i + 1, scaled_left)).ok();                                      
+                                        border_vert_tx.send(((i * 2), scaled_right)).ok();
+                                        border_vert_tx.send(((i * 2) + 1, scaled_left)).ok();                                      
                                         
                                     });
 
@@ -672,33 +672,36 @@ pub fn create_add_components_system() -> impl systems::Runnable {
 
                                     let true_top = true_top.unwrap().y;
 
-                                    let (vertex_data_tx, vertex_data_rx) = crossbeam_channel::unbounded::<(usize, VertexData)>();
+                                    let (wall_conn_tx, wall_conn_rx) = crossbeam_channel::unbounded::<VertexData>();
+                                    let (wall_tx, wall_rx) = crossbeam_channel::unbounded::<VertexData>();
 
                                     rayon::scope(|s| {
-
-                                        let vertex_data_tx1 = vertex_data_tx.clone();
-
                                         if let Some(sides) = &must_connect {
                                             s.spawn(move |_| {
                                                 let bottom = center.y - BEVEL_HEIGHT;
-                                                vertex_data_tx1.send((0, draw_walls(&connect_points_final, &sides, center, point, world_point, bottom, true_top, &mut offset))).ok();
+                                                wall_conn_tx.send(draw_walls(&connect_points_final, &sides, center, point, world_point, bottom, true_top)).ok();
                                             });
                                         }
-                                        s.spawn(move |_| {
-                                            vertex_data_tx.send((1, draw_walls(&border_points, &point_sides, center, point, world_point, map_coords_to_world(bottom).y, true_top, &mut offset))).ok();
-                                        });
-
+                                        s.spawn(move |_|{
+                                            wall_tx.send(draw_walls(&border_points, &point_sides, center, point, world_point, map_coords_to_world(bottom).y, true_top)).ok();
+                                        })
                                     });
 
-                                    let mut verts = vertex_data_rx.into_iter().collect::<Vec<(usize, VertexData)>>();
-                                    verts.par_sort_by(|(a, _), (b, _)| a.cmp(&b));
-                                    verts.into_iter().for_each(|(_,v)| {
-                                        vertex_data.verts.par_extend(v.verts);
-                                        vertex_data.normals.par_extend(v.normals);
-                                        vertex_data.uvs.par_extend(v.uvs);
-                                        vertex_data.uv2s.par_extend(v.uv2s);
-                                        vertex_data.indices.par_extend(v.indices);
-                                    });
+                                    let mut walls = wall_conn_rx.into_iter().collect::<Vec<VertexData>>();
+                                    walls.extend(wall_rx.into_iter());
+
+                                    walls.iter_mut().for_each(|v| {
+
+                                        v.indices.iter_mut().for_each(|i| *i += offset);
+                                        offset += v.verts.len() as i32;
+                                        
+                                        vertex_data.verts.par_extend(v.verts.par_iter());
+                                        vertex_data.normals.par_extend(v.normals.par_iter());
+                                        vertex_data.uvs.par_extend(v.uvs.par_iter());
+                                        vertex_data.uv2s.par_extend(v.uv2s.par_iter());
+                                        vertex_data.indices.par_extend(v.indices.par_iter());
+
+                                    })
                                     
                                 }
 
@@ -1268,7 +1271,6 @@ fn draw_walls(
     world_point: Vector3D, 
     bottom: f32, 
     true_top: f32, 
-    offset: &mut i32
 ) -> VertexData {
     //define the vertices for the walls
     let border_points_len = points.len();
@@ -1280,9 +1282,7 @@ fn draw_walls(
     let top = points[0].y;
     let height = top - bottom;
 
-    let begin = *offset;
     let indices_len = border_points_len * 2;
-    *offset += indices_len as i32;
 
     let mut center = center;
 
@@ -1462,13 +1462,13 @@ fn draw_walls(
 
                         let indices_idx = i * 6;
 
-                        new_idx_tx.send((indices_idx, j % len + begin)).ok();
-                        new_idx_tx.send((indices_idx + 1, (j+1) % len + begin)).ok();
-                        new_idx_tx.send((indices_idx + 2, (j+2) % len + begin)).ok();
+                        new_idx_tx.send((indices_idx, j % len)).ok();
+                        new_idx_tx.send((indices_idx + 1, (j+1) % len)).ok();
+                        new_idx_tx.send((indices_idx + 2, (j+2) % len)).ok();
 
-                        new_idx_tx.send((indices_idx + 3, (j+2) % len + begin)).ok();
-                        new_idx_tx.send((indices_idx + 4, (j+1) % len + begin)).ok();
-                        new_idx_tx.send((indices_idx + 5, (j+3) % len + begin)).ok();
+                        new_idx_tx.send((indices_idx + 3, (j+2) % len)).ok();
+                        new_idx_tx.send((indices_idx + 4, (j+1) % len)).ok();
+                        new_idx_tx.send((indices_idx + 5, (j+3) % len)).ok();
 
                     } else {
                         // godot_print!("{:?} is not drawing {:?}", point, dir);
