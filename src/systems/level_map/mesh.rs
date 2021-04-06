@@ -401,9 +401,6 @@ pub fn create_add_components_system() -> impl systems::Runnable {
                                         bottom_right
                                     ];
 
-                                    // let mut connect_points: Vec<Vector3> = Vec::with_capacity(12);
-                                    // let mut face_points: Vec<Vector3> = Vec::with_capacity(12);
-
                                     let (face_tx, face_rx) = crossbeam_channel::unbounded::<(usize, Vec<Vector3>)>();
                                     let (conn_tx, conn_rx) = crossbeam_channel::unbounded::<(usize, Vec<Vector3>)>();
 
@@ -466,103 +463,118 @@ pub fn create_add_components_system() -> impl systems::Runnable {
                                     vertex_data.normals.push(Vector3::new(0.,1.,0.));
                                     offset += 1;
 
-                                    //TODO: face_points_final and connect_points processing can happen simultaenously
-
                                     let face_points_final_len = face_points_final.len();
-
-                                    if draw_top {
-
-                                        let (face_vert_tx, face_vert_rx) = crossbeam_channel::unbounded::<(usize, (Vector3, Vector3, Vector2, Vector2, i32))>();
-                                        let (face_idx_tx, face_idx_rx) = crossbeam_channel::unbounded::<(usize, i32)>();
-
-                                        (0..face_points_final_len).into_par_iter().for_each_with((face_vert_tx, face_idx_tx), |(face_vert_tx, face_idx_tx), i| {
-                                            let right = face_points_final[i % face_points_final_len];
-
-                                            let u = (right.x - world_point.x).abs() * TILE_SIZE;
-                                            let v = (right.z - world_point.z).abs() * TILE_SIZE;
-
-                                            face_vert_tx.send(
-                                            (i, 
-                                                    (
-                                                        right,
-                                                        Vector3::new(0., 1., 0.),
-                                                        Vector2::new(u + tile_col_offset, v + tile_row_offset),
-                                                        Vector2::default(),
-                                                        offset + i as i32
-                                                    ),
-                                                )
-                                            ).ok();
-
-                                            if i > 0 && i < face_points_final_len - 1 {
-                                                face_idx_tx.send((i, offset)).ok();
-                                                face_idx_tx.send((i, offset + i as i32)).ok();
-                                                face_idx_tx.send((i, offset + (i as i32 + 1) % face_points_final_len as i32)).ok();
-                                            }
-                                        });
-
-                                        offset += face_points_final_len as i32;
-
-                                        let mut face_verts = face_vert_rx.into_iter().collect::<Vec<(usize, (Vector3, Vector3, Vector2, Vector2, i32))>>();
-                                        face_verts.par_sort_by(|(a, _), (b, _)| a.cmp(&b));
-                                        let face_vertices = face_verts.par_iter().map(|(_,(v,_,_,_,_))| *v).collect::<Vec<Vector3>>();
-                                        let face_norms = face_verts.par_iter().map(|(_,(_,n,_,_,_))| *n).collect::<Vec<Vector3>>();
-                                        let face_uvs = face_verts.par_iter().map(|(_,(_,_,u,_,_))| *u).collect::<Vec<Vector2>>();
-                                        let face_uv2s = face_verts.par_iter().map(|(_,(_,_,_,u2,_))| *u2).collect::<Vec<Vector2>>();
-                                        face_verts.into_par_iter().map(|(_,(_,_,_,_,i))| i).collect_into_vec(&mut face_point_indices);
-
-                                        vertex_data.verts.par_extend(face_vertices.into_par_iter());
-                                        vertex_data.normals.par_extend(face_norms.into_par_iter());
-                                        vertex_data.uvs.par_extend(face_uvs.into_par_iter());
-                                        vertex_data.uv2s.par_extend(face_uv2s.into_par_iter());
-                                        
-                                        let mut face_indices = face_idx_rx.into_iter().collect::<Vec<(usize, i32)>>();
-                                        face_indices.par_sort_by(|(a, _), (b, _)| a.cmp(&b));
-                                        let face_indices = face_indices.into_par_iter().map(|(_, i)| i);
-
-                                        vertex_data.indices.par_extend(face_indices);
-                                    }
-
                                     let connect_points_len = connect_points.len();
 
-                                    let mut connect_points_final: Vec<Vector3> = Vec::with_capacity(connect_points_len * 2);
+                                    let (face_vert_tx, face_vert_rx) = crossbeam_channel::unbounded::<(usize, (Vector3, Vector3, Vector2, Vector2, i32))>();
+                                    let (face_idx_tx, face_idx_rx) = crossbeam_channel::unbounded::<(usize, i32)>();
+                                    let (conn_pts_tx, conn_pts_rx) = crossbeam_channel::unbounded::<(usize, Vector3)>();
 
-                                    if let Some(sides) = &must_connect {
-                                        (0..connect_points_len).for_each(|i| {
-                                            let right_index = i;
-                                            let left_index = (i + 1) % connect_points_len;
+                                    let face_points_moved = face_points_final.clone();
+                                    let must_connect_moved = must_connect.clone();
+                                    rayon::scope(move |s| {
 
-                                            let right = connect_points[right_index];
-                                            let left = connect_points[left_index];
+                                        s.spawn(move |_| {
 
-                                            let dir = get_direction_of_edge(right, left, center);
+                                            if draw_top {
 
-                                            let right_rot = nalgebra::Rotation3::<f32>::from_axis_angle(&Vector3D::y_axis(), std::f32::consts::FRAC_PI_2);
-                                            let left_rot = nalgebra::Rotation3::<f32>::from_axis_angle(&Vector3D::y_axis(), -std::f32::consts::FRAC_PI_2);
-                                            let right_dir = right_rot * Vector3D::new(dir.x as f32, dir.y as f32, dir.z as f32);
-                                            let right_dir = Point::new(right_dir.x as i32, right_dir.y as i32, right_dir.z as i32);
-                                            
-                                            let left_dir = -right_dir;
+                                                (0..face_points_final_len).into_par_iter().for_each_with((face_vert_tx, face_idx_tx), |(face_vert_tx, face_idx_tx), i| {
+                                                    let right = face_points_moved[i % face_points_final_len];
 
-                                            let right_diag= nalgebra::Rotation3::<f32>::from_axis_angle(&Vector3D::y_axis(), std::f32::consts::FRAC_PI_4) * Vector3D::new(dir.x as f32, dir.y as f32, dir.z as f32);
-                                            let right_diag = Point::new(right_diag.x.round() as i32, right_diag.y.round() as i32, right_diag.z.round() as i32);    
+                                                    let u = (right.x - world_point.x).abs() * TILE_SIZE;
+                                                    let v = (right.z - world_point.z).abs() * TILE_SIZE;
 
-                                            let original_scaled_right = scale_from_origin(right, center, 1./(1.-BEVEL_SIZE));
-                                            let original_scaled_left = scale_from_origin(left, center, 1./(1.-BEVEL_SIZE));
+                                                    face_vert_tx.send(
+                                                        (i, 
+                                                            (
+                                                                right,
+                                                                Vector3::new(0., 1., 0.),
+                                                                Vector2::new(u + tile_col_offset, v + tile_row_offset),
+                                                                Vector2::default(),
+                                                                offset + i as i32
+                                                            ),
+                                                        )
+                                                    ).ok();
 
-                                            //change the origin of our scale for when certain sides are exposed or not
-                                            let (scaled_left, scaled_right) = adjust_scaled_pts(&sides, dir, right_dir, left_dir, right_diag, left, right, center, left_rot, right_rot, original_scaled_left, original_scaled_right);
+                                                    if i > 0 && i < face_points_final_len - 1 {
+                                                        face_idx_tx.send((i, offset)).ok();
+                                                        face_idx_tx.send((i, offset + i as i32)).ok();
+                                                        face_idx_tx.send((i, offset + (i as i32 + 1) % face_points_final_len as i32)).ok();
+                                                    }
+                                                });
 
-                                            connect_points_final.extend(&[scaled_right, scaled_left]);
+                                            }
+
                                         });
-                                    }
 
-                                    let mut border_points = Vec::with_capacity(face_points_final_len);
+                                        s.spawn(move |_| {
 
-                                    //defining the curve to the top face
-                                    let mut i = 0;
-                                    let begin = offset;
-                                    while i < face_points_final_len {
+                                            if let Some(sides) = &must_connect_moved {
+                                                (0..connect_points_len).into_par_iter().for_each_with(conn_pts_tx, |conn_pts_tx, i| {
+                                                    let right_index = i;
+                                                    let left_index = (i + 1) % connect_points_len;
 
+                                                    let right = connect_points[right_index];
+                                                    let left = connect_points[left_index];
+
+                                                    let dir = get_direction_of_edge(right, left, center);
+
+                                                    let right_rot = nalgebra::Rotation3::<f32>::from_axis_angle(&Vector3D::y_axis(), std::f32::consts::FRAC_PI_2);
+                                                    let left_rot = nalgebra::Rotation3::<f32>::from_axis_angle(&Vector3D::y_axis(), -std::f32::consts::FRAC_PI_2);
+                                                    let right_dir = right_rot * Vector3D::new(dir.x as f32, dir.y as f32, dir.z as f32);
+                                                    let right_dir = Point::new(right_dir.x as i32, right_dir.y as i32, right_dir.z as i32);
+                                                    
+                                                    let left_dir = -right_dir;
+
+                                                    let right_diag= nalgebra::Rotation3::<f32>::from_axis_angle(&Vector3D::y_axis(), std::f32::consts::FRAC_PI_4) * Vector3D::new(dir.x as f32, dir.y as f32, dir.z as f32);
+                                                    let right_diag = Point::new(right_diag.x.round() as i32, right_diag.y.round() as i32, right_diag.z.round() as i32);    
+
+                                                    let original_scaled_right = scale_from_origin(right, center, 1./(1.-BEVEL_SIZE));
+                                                    let original_scaled_left = scale_from_origin(left, center, 1./(1.-BEVEL_SIZE));
+
+                                                    //change the origin of our scale for when certain sides are exposed or not
+                                                    let (scaled_left, scaled_right) = adjust_scaled_pts(&sides, dir, right_dir, left_dir, right_diag, left, right, center, left_rot, right_rot, original_scaled_left, original_scaled_right);
+
+                                                    conn_pts_tx.send((i, scaled_right)).ok();
+                                                    conn_pts_tx.send((i + 1, scaled_left)).ok();
+                                                });
+
+                                            }
+
+                                        });
+
+                                    });
+
+                                    let mut face_verts = face_vert_rx.into_iter().collect::<Vec<(usize, (Vector3, Vector3, Vector2, Vector2, i32))>>();
+                                    face_verts.par_sort_by(|(a, _), (b, _)| a.cmp(&b));
+                                    let face_vertices = face_verts.par_iter().map(|(_,(v,_,_,_,_))| *v).collect::<Vec<Vector3>>();
+                                    let face_norms = face_verts.par_iter().map(|(_,(_,n,_,_,_))| *n).collect::<Vec<Vector3>>();
+                                    let face_uvs = face_verts.par_iter().map(|(_,(_,_,u,_,_))| *u).collect::<Vec<Vector2>>();
+                                    let face_uv2s = face_verts.par_iter().map(|(_,(_,_,_,u2,_))| *u2).collect::<Vec<Vector2>>();
+                                    face_verts.into_par_iter().map(|(_,(_,_,_,_,i))| i).collect_into_vec(&mut face_point_indices);
+
+                                    offset += face_vertices.len() as i32;
+
+                                    vertex_data.verts.par_extend(face_vertices.into_par_iter());
+                                    vertex_data.normals.par_extend(face_norms.into_par_iter());
+                                    vertex_data.uvs.par_extend(face_uvs.into_par_iter());
+                                    vertex_data.uv2s.par_extend(face_uv2s.into_par_iter());
+                                    
+                                    let mut face_indices = face_idx_rx.into_iter().collect::<Vec<(usize, i32)>>();
+                                    face_indices.par_sort_by(|(a, _), (b, _)| a.cmp(&b));
+                                    let face_indices = face_indices.into_par_iter().map(|(_, i)| i);
+
+                                    vertex_data.indices.par_extend(face_indices);
+
+                                    let mut conn_pts = conn_pts_rx.into_iter().collect::<Vec<(usize, Vector3)>>();
+                                    conn_pts.par_sort_by(|(a, _), (b, _)| a.cmp(&b));
+                                    let connect_points_final = conn_pts.into_par_iter().map(|(_, v)| v).collect::<Vec<Vector3>>();
+
+                                    let (curve_vert_tx, curve_vert_rx) = crossbeam_channel::unbounded::<(usize, (Vector3, Vector3, Vector2, Vector2))>();
+                                    let (curve_idx_tx, curve_idx_rx) = crossbeam_channel::unbounded::<(usize, Vec<i32>)>();
+                                    let (border_vert_tx, border_vert_rx) = crossbeam_channel::unbounded::<(usize, Vector3)>();
+
+                                    (0..face_points_final_len).into_par_iter().for_each_with((curve_vert_tx, curve_idx_tx, border_vert_tx),|(curve_vert_tx, curve_idx_tx, border_vert_tx), i| {
                                         let right_index = i;
                                         let left_index = (i + 1) % face_points_final_len;
 
@@ -593,63 +605,104 @@ pub fn create_add_components_system() -> impl systems::Runnable {
                                         //draw the curves
                                         if draw_top {
 
-                                            let mut scaled_left = scaled_left;
-                                            let mut scaled_right = scaled_right;
-
                                             scaled_right.y -= BEVEL_HEIGHT;
                                             scaled_left.y -= BEVEL_HEIGHT;
 
                                             let u = (scaled_right.x - world_point.x).abs() * TILE_SIZE;
                                             let v = (scaled_right.z - world_point.z).abs() * TILE_SIZE;
 
-                                            vertex_data.verts.push(scaled_right);
-                                            vertex_data.uvs.push(Vector2::new(u + tile_col_offset, v + tile_row_offset));
-                                            vertex_data.uv2s.push(Vector2::default());
-
                                             let mut normal = (scaled_right + scaled_left) / 2.;
                                             normal.y = center.y;
                                             normal = (normal - center).normalize();
 
-                                            vertex_data.normals.push(normal.normalize());
-
-                                            offset += 1;
+                                            curve_vert_tx.send((
+                                                i,
+                                                (
+                                                    scaled_right,
+                                                    normal,
+                                                    Vector2::new(u + tile_col_offset, v + tile_row_offset),
+                                                    Vector2::default()
+                                                )
+                                            )).ok();
 
                                             let face_right_index = face_point_indices[right_index];
                                             let face_left_index = face_point_indices[left_index]; 
 
                                             if point_sides.contains(&dir) || (!point_sides.contains(&right_dir) && point_sides.contains(&right_diag)) || (!point_sides.contains(&left_dir) && point_sides.contains(&left_diag)){
-                                                vertex_data.indices.push(face_left_index);
-                                                vertex_data.indices.push(face_right_index);
-                                                vertex_data.indices.push(begin + left_index as i32);
-
-                                                vertex_data.indices.push(face_right_index);
-                                                vertex_data.indices.push(begin + right_index as i32);
-                                                vertex_data.indices.push(begin + left_index as i32);
+                                                curve_idx_tx.send((i, vec![
+                                                    face_left_index,
+                                                    face_right_index,
+                                                    offset + left_index as i32,
+                                                    face_right_index,
+                                                    offset + right_index as i32,
+                                                    offset + left_index as i32
+                                                ])).ok();
                                             }
+
                                         }
 
-                                        if draw_top {
-                                            scaled_left.y -= BEVEL_HEIGHT;
-                                            scaled_right.y -= BEVEL_HEIGHT;
-                                        }
-
-                                        border_points.push(scaled_right);
-                                        border_points.push(scaled_left);                                        
+                                        border_vert_tx.send((i, scaled_right)).ok();
+                                        border_vert_tx.send((i + 1, scaled_left)).ok();                                      
                                         
-                                        i += 1;
-                                    }
+                                    });
+
+                                    let mut curve_verts = curve_vert_rx.into_iter().collect::<Vec<(usize, (Vector3, Vector3, Vector2, Vector2))>>();
+                                    curve_verts.par_sort_by(|(a, _), (b, _)| a.cmp(&b));
+                                    let curve_vertices = curve_verts.par_iter().map(|(_,(v,_,_,_))| *v).collect::<Vec<Vector3>>();
+                                    let curve_norms = curve_verts.par_iter().map(|(_,(_,n,_,_))| *n).collect::<Vec<Vector3>>();
+                                    let curve_uvs = curve_verts.par_iter().map(|(_,(_,_,u,_))| *u).collect::<Vec<Vector2>>();
+                                    let curve_uv2s = curve_verts.par_iter().map(|(_,(_,_,_,u2))| *u2).collect::<Vec<Vector2>>();
+                                    
+                                    let mut curve_indices = curve_idx_rx.into_iter().collect::<Vec<(usize, Vec<i32>)>>();
+                                    curve_indices.par_sort_by(|(a, _), (b, _)| a.cmp(&b));
+                                    let curve_indices = curve_indices.iter().fold(Vec::<i32>::with_capacity(curve_indices.len() * 6), |mut acc, (_, i)| {acc.extend(i); acc}).into_par_iter();
+
+                                    offset += curve_vertices.len() as i32;
+
+                                    vertex_data.verts.par_extend(curve_vertices);
+                                    vertex_data.normals.par_extend(curve_norms);
+                                    vertex_data.uvs.par_extend(curve_uvs);
+                                    vertex_data.uv2s.par_extend(curve_uv2s);
+
+                                    vertex_data.indices.par_extend(curve_indices);
+
+                                    let mut border_points = border_vert_rx.into_iter().collect::<Vec<(usize, Vector3)>>();
+                                    border_points.par_sort_by(|(a, _), (b, _)| a.cmp(&b));
+                                    let border_points = border_points.into_par_iter().map(|(_, v)| v).collect::<Vec<Vector3>>();
 
                                     let true_top = true_top.unwrap().y;
 
-                                    if let Some(sides) = &must_connect {
-                                        let bottom = center.y - BEVEL_HEIGHT;
-                                        draw_walls(&connect_points_final, &sides, &mut vertex_data, center, point, world_point, bottom, true_top, &mut offset);
-                                    }
+                                    let (vertex_data_tx, vertex_data_rx) = crossbeam_channel::unbounded::<(usize, VertexData)>();
 
-                                    draw_walls(&border_points, &point_sides, &mut vertex_data, center, point, world_point, map_coords_to_world(bottom).y, true_top, &mut offset);
+                                    rayon::scope(|s| {
+
+                                        let vertex_data_tx1 = vertex_data_tx.clone();
+
+                                        if let Some(sides) = &must_connect {
+                                            s.spawn(move |_| {
+                                                let bottom = center.y - BEVEL_HEIGHT;
+                                                vertex_data_tx1.send((0, draw_walls(&connect_points_final, &sides, center, point, world_point, bottom, true_top, &mut offset))).ok();
+                                            });
+                                        }
+                                        s.spawn(move |_| {
+                                            vertex_data_tx.send((1, draw_walls(&border_points, &point_sides, center, point, world_point, map_coords_to_world(bottom).y, true_top, &mut offset))).ok();
+                                        });
+
+                                    });
+
+                                    let mut verts = vertex_data_rx.into_iter().collect::<Vec<(usize, VertexData)>>();
+                                    verts.par_sort_by(|(a, _), (b, _)| a.cmp(&b));
+                                    verts.into_iter().for_each(|(_,v)| {
+                                        vertex_data.verts.par_extend(v.verts);
+                                        vertex_data.normals.par_extend(v.normals);
+                                        vertex_data.uvs.par_extend(v.uvs);
+                                        vertex_data.uv2s.par_extend(v.uv2s);
+                                        vertex_data.indices.par_extend(v.indices);
+                                    });
+                                    
                                 }
 
-                            vertex_tx.send(vertex_data).unwrap();
+                            vertex_tx.send(vertex_data).ok();
 
                         }); //end of iterating through tiles in row
 
@@ -660,11 +713,11 @@ pub fn create_add_components_system() -> impl systems::Runnable {
 
                         let length = received.verts.len();
 
-                        vertex_data.verts.extend(received.verts);
-                        vertex_data.normals.extend(received.normals);
-                        vertex_data.uvs.extend(received.uvs);
-                        vertex_data.uv2s.extend(received.uv2s);
-                        vertex_data.indices.extend(received.indices.into_iter().map(|i| i+offset));
+                        vertex_data.verts.par_extend(received.verts);
+                        vertex_data.normals.par_extend(received.normals);
+                        vertex_data.uvs.par_extend(received.uvs);
+                        vertex_data.uv2s.par_extend(received.uv2s);
+                        vertex_data.indices.par_extend(received.indices.into_par_iter().map(|i| i+offset));
 
                         offset += length as i32;
                     }
@@ -719,13 +772,13 @@ pub fn create_add_components_system() -> impl systems::Runnable {
                     mesh_data.clear();
 
                     let mut offset = 0;
-                    map_mesh_data.cols.iter().for_each(|vertex_data| {
+                    map_mesh_data.cols.iter().for_each(move |vertex_data| {
                         
-                        mesh_data.verts.extend(vertex_data.verts.iter());
-                        mesh_data.normals.extend(vertex_data.normals.iter());
-                        mesh_data.uvs.extend(vertex_data.uvs.iter());
-                        mesh_data.uv2s.extend(vertex_data.uv2s.iter());
-                        mesh_data.indices.extend(vertex_data.indices.iter().map(|i| i + offset));
+                        mesh_data.verts.par_extend(vertex_data.verts.par_iter());
+                        mesh_data.normals.par_extend(vertex_data.normals.par_iter());
+                        mesh_data.uvs.par_extend(vertex_data.uvs.par_iter());
+                        mesh_data.uv2s.par_extend(vertex_data.uv2s.par_iter());
+                        mesh_data.indices.par_extend(vertex_data.indices.par_iter().map(|i| i + offset));
                         
                         offset += vertex_data.verts.len() as i32;
                     });
@@ -1210,19 +1263,18 @@ fn define_verts_from_sides(sides: &HashSet<Point>, left: Vector3, right: Vector3
 fn draw_walls(
     points: &[Vector3], 
     sides: &HashSet<Point>, 
-    vertex_data: &mut VertexData, 
     center: Vector3, 
     point: Point, 
     world_point: Vector3D, 
     bottom: f32, 
     true_top: f32, 
     offset: &mut i32
-) {
+) -> VertexData {
     //define the vertices for the walls
     let border_points_len = points.len();
 
     if border_points_len == 0 {
-        return;
+        return VertexData::default();
     }
 
     let top = points[0].y;
@@ -1235,6 +1287,8 @@ fn draw_walls(
     let mut center = center;
 
     center.y = 0.;
+
+    let mut vertex_data = VertexData::default();
 
     let (new_pts_tx, new_pts_rx) = crossbeam_channel::unbounded::<(usize, Vector3)>();
     let (new_norm_tx, new_norm_rx) = crossbeam_channel::unbounded::<(usize, Vector3)>();
@@ -1428,29 +1482,25 @@ fn draw_walls(
 
     let mut new_pts = new_pts_rx.into_iter().collect::<Vec<(usize, Vector3)>>();
     new_pts.par_sort_by(|(a, _), (b, _)| a.cmp(&b));
-    let new_pts = new_pts.into_par_iter().map(|(_, v)| v);
+    new_pts.into_par_iter().map(|(_, v)| v).collect_into_vec(&mut vertex_data.verts);
 
     let mut new_normals = new_norm_rx.into_iter().collect::<Vec<(usize, Vector3)>>();
     new_normals.par_sort_by(|(a, _), (b, _)| a.cmp(&b));
-    let new_normals = new_normals.into_par_iter().map(|(_, n)| n);
+    new_normals.into_par_iter().map(|(_, n)| n).collect_into_vec(&mut vertex_data.normals);
 
     let mut new_uvs = new_uv_rx.into_iter().collect::<Vec<(usize, Vector2)>>();
     new_uvs.par_sort_by(|(a, _), (b, _)| a.cmp(&b));
-    let new_uvs = new_uvs.into_par_iter().map(|(_, u)| u);
+    new_uvs.into_par_iter().map(|(_, u)| u).collect_into_vec(&mut vertex_data.uvs);
 
     let mut new_uv2s = new_uv2_rx.into_iter().collect::<Vec<(usize, Vector2)>>();
     new_uv2s.par_sort_by(|(a, _), (b, _)| a.cmp(&b));
-    let new_uv2s = new_uv2s.into_par_iter().map(|(_, u)| u);
+    new_uv2s.into_par_iter().map(|(_, u)| u).collect_into_vec(&mut vertex_data.uv2s);
 
     let mut new_indices = new_idx_rx.into_iter().collect::<Vec<(usize, i32)>>();
     new_indices.par_sort_by(|(a, _), (b, _)| a.cmp(&b));
-    let new_indices = new_indices.into_par_iter().map(|(_, i)| i);
+    new_indices.into_par_iter().map(|(_, i)| i).collect_into_vec(&mut vertex_data.indices);
 
-    vertex_data.verts.par_extend(new_pts);
-    vertex_data.normals.par_extend(new_normals);
-    vertex_data.uvs.par_extend(new_uvs);
-    vertex_data.uv2s.par_extend(new_uv2s);
-    vertex_data.indices.par_extend(new_indices);
+    vertex_data
 }
 
 pub struct MapMeshData {
